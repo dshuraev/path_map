@@ -1,6 +1,16 @@
 # PathMap
 
-**TODO: Add description**
+Deterministic nested-map access/update, with explicit error semantics and controlled key creation.
+
+- operates on *pure (possibly nested) Elixir maps*
+- uses *paths* (lists of keys) to address nested location
+- provides *strict* and *auto-vivifying* API variants
+
+What it's not (yet):
+
+- no general "lens DSL" (filters, recursion, multi-focus)
+- no support for arbitrary containers (lists/tuples/structs)
+- no schema engine
 
 ## Installation
 
@@ -18,4 +28,3 @@ end
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/path_map>.
-
