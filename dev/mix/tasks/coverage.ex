@@ -3,13 +3,7 @@ defmodule Mix.Tasks.Coverage do
 
   @shortdoc "Run tests with coverage and generate HTML report in cover/"
 
-  @moduledoc """
-  Runs `mix test --cover` to produce a coverage report.
-
-  The HTML report is written under `cover/` (open `cover/index.html`).
-
-  Any arguments are forwarded to `mix test`, e.g. `mix coverage --trace`.
-  """
+  @moduledoc false
 
   @impl Mix.Task
   def run(args) do

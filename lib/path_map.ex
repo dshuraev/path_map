@@ -102,13 +102,9 @@ defmodule PathMap do
           {:error, {:not_a_map, val(), path()} | {:missing, path()} | :invalid_path}
           | {:ok, val()}
 
-  def fetch(map, path) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      true -> fetch_nested(map, path, [])
-    end
-  end
+  def fetch(map, _path) when not is_map(map), do: {:error, {:not_a_map, map, []}}
+  def fetch(_map, path) when not is_list(path), do: {:error, :invalid_path}
+  def fetch(map, path), do: fetch_nested(map, path, [])
 
   defp fetch_nested(map, [], _acc) when is_map(map), do: {:ok, map}
 
@@ -249,13 +245,9 @@ defmodule PathMap do
   @spec put_auto(t(), path(), val()) ::
           {:ok, t()}
           | {:error, :invalid_path | {:not_a_map, val(), path()}}
-  def put_auto(map, path, val) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      true -> put_auto_nested(map, path, val, [])
-    end
-  end
+  def put_auto(map, _path, _val) when not is_map(map), do: {:error, {:not_a_map, map, []}}
+  def put_auto(_map, path, _val) when not is_list(path), do: {:error, :invalid_path}
+  def put_auto(map, path, val), do: put_auto_nested(map, path, val, [])
 
   # replace entire state with val
   defp put_auto_nested(map, [], val, _acc) when is_map(map), do: {:ok, val}
@@ -267,16 +259,21 @@ defmodule PathMap do
 
   # normal path
   defp put_auto_nested(map, [key | rest], val, acc) when is_map(map) do
-    next = Map.get(map, key, %{})
+    case Map.fetch(map, key) do
+      {:ok, next} when is_map(next) ->
+        case put_auto_nested(next, rest, val, [key | acc]) do
+          {:ok, updated_next} -> {:ok, Map.put(map, key, updated_next)}
+          {:error, _} = error -> error
+        end
 
-    case put_auto_nested(next, rest, val, [key | acc]) do
-      {:ok, updated_next} -> {:ok, Map.put(map, key, updated_next)}
-      {:error, _} = error -> error
+      {:ok, not_a_map} ->
+        {:error, {:not_a_map, not_a_map, Enum.reverse(acc, [key])}}
+
+      :error ->
+        {:ok, updated_next} = put_auto_nested(%{}, rest, val, [key | acc])
+        {:ok, Map.put(map, key, updated_next)}
     end
   end
-
-  defp put_auto_nested(not_a_map, _path, _val, acc),
-    do: {:error, {:not_a_map, not_a_map, Enum.reverse(acc)}}
 
   @doc """
   Strict insertion.
@@ -308,13 +305,9 @@ defmodule PathMap do
   @spec put(t(), path(), val()) ::
           {:ok, t()}
           | {:error, :invalid_path | {:not_a_map, val(), path()} | {:missing, path()}}
-  def put(map, path, val) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      true -> put_nested(map, path, val, [])
-    end
-  end
+  def put(map, _path, _val) when not is_map(map), do: {:error, {:not_a_map, map, []}}
+  def put(_map, path, _val) when not is_list(path), do: {:error, :invalid_path}
+  def put(map, path, val), do: put_nested(map, path, val, [])
 
   defp put_nested(map, [], val, _acc) when is_map(map), do: {:ok, val}
 
@@ -363,13 +356,9 @@ defmodule PathMap do
           | err_invalid_path()
           | err_missing()
           | {:error, :already_exists}
-  def put_new(map, path, val) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      true -> put_new_nested(map, path, val, [])
-    end
-  end
+  def put_new(map, _path, _val) when not is_map(map), do: {:error, {:not_a_map, map, []}}
+  def put_new(_map, path, _val) when not is_list(path), do: {:error, :invalid_path}
+  def put_new(map, path, val), do: put_new_nested(map, path, val, [])
 
   defp put_new_nested(map, [], _val, _acc) when is_map(map), do: {:error, :already_exists}
 
@@ -419,13 +408,9 @@ defmodule PathMap do
           | err_not_a_map()
           | err_invalid_path()
           | {:error, :already_exists}
-  def put_new_auto(map, path, val) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      true -> put_new_auto_nested(map, path, val, [])
-    end
-  end
+  def put_new_auto(map, _path, _val) when not is_map(map), do: {:error, {:not_a_map, map, []}}
+  def put_new_auto(_map, path, _val) when not is_list(path), do: {:error, :invalid_path}
+  def put_new_auto(map, path, val), do: put_new_auto_nested(map, path, val, [])
 
   defp put_new_auto_nested(map, [], _val, _acc) when is_map(map),
     do: {:error, :already_exists}
@@ -438,16 +423,21 @@ defmodule PathMap do
   end
 
   defp put_new_auto_nested(map, [key | rest], val, acc) when is_map(map) do
-    next = Map.get(map, key, %{})
+    case Map.fetch(map, key) do
+      {:ok, next} when is_map(next) ->
+        case put_new_auto_nested(next, rest, val, [key | acc]) do
+          {:ok, updated_next} -> {:ok, Map.put(map, key, updated_next)}
+          {:error, _} = error -> error
+        end
 
-    case put_new_auto_nested(next, rest, val, [key | acc]) do
-      {:ok, updated_next} -> {:ok, Map.put(map, key, updated_next)}
-      {:error, _} = error -> error
+      {:ok, not_a_map} ->
+        {:error, {:not_a_map, not_a_map, Enum.reverse(acc, [key])}}
+
+      :error ->
+        {:ok, updated_next} = put_new_auto_nested(%{}, rest, val, [key | acc])
+        {:ok, Map.put(map, key, updated_next)}
     end
   end
-
-  defp put_new_auto_nested(not_a_map, _path, _val, acc),
-    do: {:error, {:not_a_map, not_a_map, Enum.reverse(acc)}}
 
   @doc """
   Initialize an element at `path` with `initializer` function if it doesn't exist.
@@ -480,14 +470,15 @@ defmodule PathMap do
           | err_invalid_path()
           | err_missing()
           | err_invalid_initializer()
-  def ensure(map, path, initializer) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      not is_function(initializer, 0) -> {:error, {:invalid_initializer, initializer}}
-      true -> ensure_nested(map, path, initializer, [])
-    end
-  end
+  def ensure(map, _path, _initializer) when not is_map(map),
+    do: {:error, {:not_a_map, map, []}}
+
+  def ensure(_map, path, _initializer) when not is_list(path), do: {:error, :invalid_path}
+
+  def ensure(_map, _path, initializer) when not is_function(initializer, 0),
+    do: {:error, {:invalid_initializer, initializer}}
+
+  def ensure(map, path, initializer), do: ensure_nested(map, path, initializer, [])
 
   defp ensure_nested(map, [], _initializer, _acc) when is_map(map), do: {:ok, map}
 
@@ -546,14 +537,15 @@ defmodule PathMap do
           | err_missing()
           | {:error, :leaf_missing}
           | err_invalid_fun()
-  def update(map, path, function) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      not is_function(function, 1) -> {:error, {:invalid_function, function, 1}}
-      true -> update_nested(map, path, function, [])
-    end
-  end
+  def update(map, _path, _function) when not is_map(map),
+    do: {:error, {:not_a_map, map, []}}
+
+  def update(_map, path, _function) when not is_list(path), do: {:error, :invalid_path}
+
+  def update(_map, _path, function) when not is_function(function, 1),
+    do: {:error, {:invalid_function, function, 1}}
+
+  def update(map, path, function), do: update_nested(map, path, function, [])
 
   defp update_nested(map, [], function, _acc) when is_map(map), do: {:ok, function.(map)}
 
@@ -607,14 +599,17 @@ defmodule PathMap do
   """
   @spec update(t(), path(), val(), (val() -> val())) ::
           {:ok, t()} | err_not_a_map() | err_invalid_path() | err_missing() | err_invalid_fun()
-  def update(map, path, default, function) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      not is_function(function, 1) -> {:error, {:invalid_function, function, 1}}
-      true -> update_with_default_nested(map, path, default, function, [])
-    end
-  end
+  def update(map, _path, _default, _function) when not is_map(map),
+    do: {:error, {:not_a_map, map, []}}
+
+  def update(_map, path, _default, _function) when not is_list(path),
+    do: {:error, :invalid_path}
+
+  def update(_map, _path, _default, function) when not is_function(function, 1),
+    do: {:error, {:invalid_function, function, 1}}
+
+  def update(map, path, default, function),
+    do: update_with_default_nested(map, path, default, function, [])
 
   defp update_with_default_nested(map, [], _default, function, _acc) when is_map(map),
     do: {:ok, function.(map)}
@@ -663,14 +658,17 @@ defmodule PathMap do
   """
   @spec update_auto(t(), path(), val(), (val() -> val())) ::
           {:ok, t()} | err_not_a_map() | err_invalid_path() | err_invalid_fun()
-  def update_auto(map, path, default, function) do
-    cond do
-      not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, :invalid_path}
-      not is_function(function, 1) -> {:error, {:invalid_function, function, 1}}
-      true -> update_auto_nested(map, path, default, function, [])
-    end
-  end
+  def update_auto(map, _path, _default, _function) when not is_map(map),
+    do: {:error, {:not_a_map, map, []}}
+
+  def update_auto(_map, path, _default, _function) when not is_list(path),
+    do: {:error, :invalid_path}
+
+  def update_auto(_map, _path, _default, function) when not is_function(function, 1),
+    do: {:error, {:invalid_function, function, 1}}
+
+  def update_auto(map, path, default, function),
+    do: update_auto_nested(map, path, default, function, [])
 
   defp update_auto_nested(map, [], _default, function, _acc) when is_map(map),
     do: {:ok, function.(map)}
@@ -681,16 +679,21 @@ defmodule PathMap do
   end
 
   defp update_auto_nested(map, [key | rest], default, function, acc) when is_map(map) do
-    next = Map.get(map, key, %{})
+    case Map.fetch(map, key) do
+      {:ok, next} when is_map(next) ->
+        case update_auto_nested(next, rest, default, function, [key | acc]) do
+          {:ok, updated_next} -> {:ok, Map.put(map, key, updated_next)}
+          {:error, _} = error -> error
+        end
 
-    case update_auto_nested(next, rest, default, function, [key | acc]) do
-      {:ok, updated_next} -> {:ok, Map.put(map, key, updated_next)}
-      {:error, _} = error -> error
+      {:ok, not_a_map} ->
+        {:error, {:not_a_map, not_a_map, Enum.reverse(acc, [key])}}
+
+      :error ->
+        {:ok, updated_next} = update_auto_nested(%{}, rest, default, function, [key | acc])
+        {:ok, Map.put(map, key, updated_next)}
     end
   end
-
-  defp update_auto_nested(not_a_map, _path, _default, _function, acc),
-    do: {:error, {:not_a_map, not_a_map, Enum.reverse(acc)}}
 
   #!SECTION - Write API
 end

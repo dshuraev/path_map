@@ -99,6 +99,13 @@ defmodule PathMapTest do
     test "errors on invalid path type" do
       assert {:error, :invalid_path} == PathMap.put_auto(%{}, :bad, 1)
     end
+
+    test "propagates nested non-map errors when deeper segment is invalid" do
+      map = %{a: %{b: %{c: 1}}}
+
+      assert {:error, {:not_a_map, 1, [:a, :b, :c]}} ==
+               PathMap.put_auto(map, [:a, :b, :c, :d], 2)
+    end
   end
 
   describe "put/3" do
@@ -165,6 +172,11 @@ defmodule PathMapTest do
                PathMap.put_new_auto(%{}, [:a, :b, :c], 3)
     end
 
+    test "inserts under existing nested map" do
+      assert {:ok, %{a: %{b: %{c: 1}}}} ==
+               PathMap.put_new_auto(%{a: %{b: %{}}}, [:a, :b, :c], 1)
+    end
+
     test "errors when leaf exists" do
       assert {:error, :already_exists} ==
                PathMap.put_new_auto(%{a: %{b: 1}}, [:a, :b], 2)
@@ -185,6 +197,13 @@ defmodule PathMapTest do
 
     test "errors when path is empty" do
       assert {:error, :already_exists} == PathMap.put_new_auto(%{}, [], 1)
+    end
+
+    test "propagates nested non-map errors during auto-vivification" do
+      map = %{a: %{b: %{c: 1}}}
+
+      assert {:error, {:not_a_map, 1, [:a, :b, :c]}} ==
+               PathMap.put_new_auto(map, [:a, :b, :c, :d], 2)
     end
   end
 
@@ -210,6 +229,10 @@ defmodule PathMapTest do
                PathMap.ensure(%{a: 1}, [:a, :b], fn -> 1 end)
     end
 
+    test "errors when path type is invalid" do
+      assert {:error, :invalid_path} == PathMap.ensure(%{}, :bad, fn -> 1 end)
+    end
+
     test "errors when root is not a map" do
       assert {:error, {:not_a_map, :oops, []}} == PathMap.ensure(:oops, [:a], fn -> 1 end)
     end
@@ -230,6 +253,10 @@ defmodule PathMapTest do
 
     test "errors when intermediate path is missing" do
       assert {:error, {:missing, [:a]}} == PathMap.update(%{}, [:a, :b], &(&1 + 1))
+    end
+
+    test "errors when path type is invalid" do
+      assert {:error, :invalid_path} == PathMap.update(%{}, :bad, & &1)
     end
 
     test "errors on invalid function arity" do
@@ -285,6 +312,10 @@ defmodule PathMapTest do
                PathMap.update(%{a: 1}, [:a, :b], 0, & &1)
     end
 
+    test "errors when path type is invalid" do
+      assert {:error, :invalid_path} == PathMap.update(%{}, :bad, 0, & &1)
+    end
+
     test "applies function when path is empty" do
       assert {:ok, %{a: 1, b: 3}} ==
                PathMap.update(%{a: 1}, [], %{}, &Map.put(&1, :b, 3))
@@ -318,6 +349,13 @@ defmodule PathMapTest do
     test "errors on invalid function arity" do
       assert {:error, {:invalid_function, :bad, 1}} ==
                PathMap.update_auto(%{}, [:a], 0, :bad)
+    end
+
+    test "propagates nested non-map errors when encountered deeper" do
+      map = %{a: %{b: %{c: 1}}}
+
+      assert {:error, {:not_a_map, 1, [:a, :b, :c]}} ==
+               PathMap.update_auto(map, [:a, :b, :c, :d], 0, & &1)
     end
 
     test "applies function when path is empty" do

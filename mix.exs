@@ -27,8 +27,9 @@ defmodule PathMap.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       canonical: "https://hexdocs.pm/path_map",
-      extras: ["README.md", "CHANGELOG.md"],
-      skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md", "LICENSE"],
+      filter_modules: &filter_docs_modules/2
     ]
   end
 
@@ -62,4 +63,8 @@ defmodule PathMap.MixProject do
   defp elixirc_paths(:dev), do: ["lib", "dev"]
   defp elixirc_paths(:test), do: ["lib", "dev"]
   defp elixirc_paths(_), do: ["lib"]
+
+  defp filter_docs_modules(module, _metadata) do
+    not String.starts_with?(Atom.to_string(module), "Elixir.Mix.Tasks.")
+  end
 end
