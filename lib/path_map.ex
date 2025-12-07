@@ -16,10 +16,10 @@ defmodule PathMap do
     missing maps on the way
 
   Error tuples you may see:
-  - `{:invalid_path, provided}` when the path is not a list
+  - `:invalid_path` when the path is not a list
   - `{:not_a_map, value, prefix}` when traversal hits a non-map at `prefix`
   - `{:missing, prefix}` when a strict operation needs a missing key
-  - `{:already_exists, path}` when `put_new*/3` refuses to overwrite
+  - `:already_exists` when `put_new*/3` refuses to overwrite
   - `{:invalid_function, fun, arity}` and `{:invalid_initializer, init}` when
     callbacks have the wrong shape
   - `:leaf_missing` when `update/3` expects a leaf that is not present
@@ -64,7 +64,7 @@ defmodule PathMap do
 
   @type err_not_a_map :: {:error, {:not_a_map, term(), path()}}
   @type err_missing :: {:error, {:missing, path()}}
-  @type err_invalid_path :: {:error, {:invalid_path, term()}}
+  @type err_invalid_path :: {:error, :invalid_path}
   @type err_invalid_fun :: {:error, {:invalid_function, term(), arity :: non_neg_integer()}}
   @type err_invalid_initializer :: {:error, {:invalid_initializer, term()}}
 
@@ -77,7 +77,7 @@ defmodule PathMap do
 
   Returns:
   - `{:ok, value}` when the path can be traversed
-  - `{:error, {:invalid_path, provided}}` when `path` is not a list
+  - `{:error, :invalid_path}` when `path` is not a list
   - `{:error, {:missing, prefix}}` when any segment does not exist
   - `{:error, {:not_a_map, val, prefix}}` when a non-map is encountered
 
@@ -93,19 +93,19 @@ defmodule PathMap do
       {:error, {:not_a_map, 1, [:a]}}
 
       iex> PathMap.fetch(%{}, :not_a_list)
-      {:error, {:invalid_path, :not_a_list}}
+      {:error, :invalid_path}
 
       iex> PathMap.fetch(:root_is_wrong, [])
       {:error, {:not_a_map, :root_is_wrong, []}}
   """
   @spec fetch(t(), path()) ::
-          {:error, {:not_a_map, val(), path()} | {:missing, path()} | {:invalid_path, term()}}
+          {:error, {:not_a_map, val(), path()} | {:missing, path()} | :invalid_path}
           | {:ok, val()}
 
   def fetch(map, path) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       true -> fetch_nested(map, path, [])
     end
   end
@@ -191,8 +191,7 @@ defmodule PathMap do
   """
   @spec validate_path(t(), path()) ::
           :ok
-          | {:error,
-             {:not_a_map, val(), path()} | {:missing, path()} | {:invalid_path, term()}}
+          | {:error, {:not_a_map, val(), path()} | {:missing, path()} | :invalid_path}
   def validate_path(map, path) do
     case fetch(map, path) do
       {:ok, _} -> :ok
@@ -233,7 +232,7 @@ defmodule PathMap do
   validation.
 
   Errors:
-  - `{:error, {:invalid_path, provided}}` if `path` is not a list
+  - `{:error, :invalid_path}` if `path` is not a list
   - `{:error, {:not_a_map, val, prefix}}` if an intermediate subtree at `prefix` is not a map
 
   ## Examples
@@ -249,11 +248,11 @@ defmodule PathMap do
   """
   @spec put_auto(t(), path(), val()) ::
           {:ok, t()}
-          | {:error, {:invalid_path, term()} | {:not_a_map, val(), path()}}
+          | {:error, :invalid_path | {:not_a_map, val(), path()}}
   def put_auto(map, path, val) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       true -> put_auto_nested(map, path, val, [])
     end
   end
@@ -288,7 +287,7 @@ defmodule PathMap do
   `{:error, {:not_a_map, val, prefix}}`.
 
   Errors:
-  - `{:error, {:invalid_path, provided}}` if `path` is not a list
+  - `{:error, :invalid_path}` if `path` is not a list
   - `{:error, {:not_a_map, val, prefix}}` if the traversal encounters a non-map at `prefix`
   - `{:error, {:missing, prefix}}` if `prefix` in `path` does not exist
 
@@ -308,11 +307,11 @@ defmodule PathMap do
   """
   @spec put(t(), path(), val()) ::
           {:ok, t()}
-          | {:error, {:invalid_path, term()} | {:not_a_map, val(), path()} | {:missing, path()}}
+          | {:error, :invalid_path | {:not_a_map, val(), path()} | {:missing, path()}}
   def put(map, path, val) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       true -> put_nested(map, path, val, [])
     end
   end
@@ -345,7 +344,7 @@ defmodule PathMap do
   Traverses strictly (no auto-vivification). Missing intermediates yield
   `{:error, {:missing, prefix}}` and hitting a non-map yields
   `{:error, {:not_a_map, val, prefix}}`. Passing `[]` returns
-  `{:error, {:already_exists, []}}`.
+  `{:error, :already_exists}`.
 
   ## Examples
 
@@ -353,7 +352,7 @@ defmodule PathMap do
       {:ok, %{a: %{b: 1, c: 2}}}
 
       iex> PathMap.put_new(%{a: %{b: 1}}, [:a, :b], 2)
-      {:error, {:already_exists, [:a, :b]}}
+      {:error, :already_exists}
 
       iex> PathMap.put_new(%{}, [:a, :b], 1)
       {:error, {:missing, [:a]}}
@@ -363,21 +362,21 @@ defmodule PathMap do
           | err_not_a_map()
           | err_invalid_path()
           | err_missing()
-          | {:error, {:already_exists, path()}}
+          | {:error, :already_exists}
   def put_new(map, path, val) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       true -> put_new_nested(map, path, val, [])
     end
   end
 
-  defp put_new_nested(map, [], _val, _acc) when is_map(map), do: {:error, {:already_exists, []}}
+  defp put_new_nested(map, [], _val, _acc) when is_map(map), do: {:error, :already_exists}
 
-  defp put_new_nested(map, [key], val, acc) when is_map(map) do
+  defp put_new_nested(map, [key], val, _acc) when is_map(map) do
     case Map.fetch(map, key) do
       :error -> {:ok, Map.put(map, key, val)}
-      {:ok, _} -> {:error, {:already_exists, Enum.reverse(acc, [key])}}
+      {:ok, _} -> {:error, :already_exists}
     end
   end
 
@@ -400,9 +399,9 @@ defmodule PathMap do
   @doc """
   Put a new element at `path` with `val`, auto-vivifying missing maps.
 
-  Returns `{:error, {:already_exists, path}}` when the leaf already exists.
-  Encountering an existing non-map still returns `{:error, {:not_a_map, val, prefix}}`.
-  Passing `[]` returns `{:error, {:already_exists, []}}`.
+  Returns `{:error, :already_exists}` when the leaf already exists. Encountering
+  an existing non-map still returns `{:error, {:not_a_map, val, prefix}}`.
+  Passing `[]` returns `{:error, :already_exists}`.
 
   ## Examples
 
@@ -410,7 +409,7 @@ defmodule PathMap do
       {:ok, %{a: %{b: %{c: 3}}}}
 
       iex> PathMap.put_new_auto(%{a: %{b: 1}}, [:a, :b], 2)
-      {:error, {:already_exists, [:a, :b]}}
+      {:error, :already_exists}
 
       iex> PathMap.put_new_auto(%{a: 1}, [:a, :b], 2)
       {:error, {:not_a_map, 1, [:a]}}
@@ -419,22 +418,22 @@ defmodule PathMap do
           {:ok, t()}
           | err_not_a_map()
           | err_invalid_path()
-          | {:error, {:already_exists, path()}}
+          | {:error, :already_exists}
   def put_new_auto(map, path, val) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       true -> put_new_auto_nested(map, path, val, [])
     end
   end
 
   defp put_new_auto_nested(map, [], _val, _acc) when is_map(map),
-    do: {:error, {:already_exists, []}}
+    do: {:error, :already_exists}
 
-  defp put_new_auto_nested(map, [key], val, acc) when is_map(map) do
+  defp put_new_auto_nested(map, [key], val, _acc) when is_map(map) do
     case Map.fetch(map, key) do
       :error -> {:ok, Map.put(map, key, val)}
-      {:ok, _} -> {:error, {:already_exists, Enum.reverse(acc, [key])}}
+      {:ok, _} -> {:error, :already_exists}
     end
   end
 
@@ -459,7 +458,7 @@ defmodule PathMap do
   returns `{:ok, map}`.
 
   Errors:
-  - `{:error, {:invalid_path, provided}}` if `path` is not a list
+  - `{:error, :invalid_path}` if `path` is not a list
   - `{:error, {:not_a_map, val, prefix}}` if a non-map is encountered on the way
   - `{:error, {:missing, prefix}}` if part of the path does not exist
   - `{:error, {:invalid_initializer, initializer}}` if initializer is not a 0-arity function
@@ -484,7 +483,7 @@ defmodule PathMap do
   def ensure(map, path, initializer) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       not is_function(initializer, 0) -> {:error, {:invalid_initializer, initializer}}
       true -> ensure_nested(map, path, initializer, [])
     end
@@ -523,7 +522,7 @@ defmodule PathMap do
   applies `function` to the entire map.
 
   Errors:
-  - `{:error, {:invalid_path, provided}}` if `path` is not a list
+  - `{:error, :invalid_path}` if `path` is not a list
   - `{:error, {:invalid_function, fun, 1}}` if `function` is not arity-1
   - `{:error, {:missing, prefix}}` if an intermediate segment is missing
   - `{:error, {:not_a_map, val, prefix}}` if an intermediate value is not a map
@@ -550,7 +549,7 @@ defmodule PathMap do
   def update(map, path, function) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       not is_function(function, 1) -> {:error, {:invalid_function, function, 1}}
       true -> update_nested(map, path, function, [])
     end
@@ -591,7 +590,7 @@ defmodule PathMap do
   empty path applies `function` to the root map.
 
   Errors:
-  - `{:error, {:invalid_path, provided}}` if `path` is not a list
+  - `{:error, :invalid_path}` if `path` is not a list
   - `{:error, {:invalid_function, fun, 1}}` if `function` is not arity-1
   - `{:error, {:not_a_map, val, prefix}}` or `{:error, {:missing, prefix}}` for traversal issues
 
@@ -611,7 +610,7 @@ defmodule PathMap do
   def update(map, path, default, function) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       not is_function(function, 1) -> {:error, {:invalid_function, function, 1}}
       true -> update_with_default_nested(map, path, default, function, [])
     end
@@ -667,7 +666,7 @@ defmodule PathMap do
   def update_auto(map, path, default, function) do
     cond do
       not is_map(map) -> {:error, {:not_a_map, map, []}}
-      not is_list(path) -> {:error, {:invalid_path, path}}
+      not is_list(path) -> {:error, :invalid_path}
       not is_function(function, 1) -> {:error, {:invalid_function, function, 1}}
       true -> update_auto_nested(map, path, default, function, [])
     end

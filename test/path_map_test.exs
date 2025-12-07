@@ -16,7 +16,7 @@ defmodule PathMapTest do
     end
 
     test "errors on invalid path type" do
-      assert {:error, {:invalid_path, :bad}} == PathMap.fetch(%{}, :bad)
+      assert {:error, :invalid_path} == PathMap.fetch(%{}, :bad)
     end
 
     test "errors when key is missing" do
@@ -65,7 +65,7 @@ defmodule PathMapTest do
     end
 
     test "returns invalid_path when path type is wrong" do
-      assert {:error, {:invalid_path, :bad}} == PathMap.validate_path(%{}, :bad)
+      assert {:error, :invalid_path} == PathMap.validate_path(%{}, :bad)
       refute PathMap.valid_path?(%{}, :bad)
     end
 
@@ -97,7 +97,7 @@ defmodule PathMapTest do
     end
 
     test "errors on invalid path type" do
-      assert {:error, {:invalid_path, :bad}} == PathMap.put_auto(%{}, :bad, 1)
+      assert {:error, :invalid_path} == PathMap.put_auto(%{}, :bad, 1)
     end
   end
 
@@ -117,7 +117,7 @@ defmodule PathMapTest do
     end
 
     test "errors on invalid path type" do
-      assert {:error, {:invalid_path, :oops}} == PathMap.put(%{}, :oops, 1)
+      assert {:error, :invalid_path} == PathMap.put(%{}, :oops, 1)
     end
 
     test "replaces the entire map when path is empty" do
@@ -135,8 +135,7 @@ defmodule PathMapTest do
     end
 
     test "errors when leaf exists" do
-      assert {:error, {:already_exists, [:a, :b]}} ==
-               PathMap.put_new(%{a: %{b: 1}}, [:a, :b], 2)
+      assert {:error, :already_exists} == PathMap.put_new(%{a: %{b: 1}}, [:a, :b], 2)
     end
 
     test "errors when intermediate missing" do
@@ -148,11 +147,11 @@ defmodule PathMapTest do
     end
 
     test "errors when path is invalid" do
-      assert {:error, {:invalid_path, :bad}} == PathMap.put_new(%{}, :bad, 1)
+      assert {:error, :invalid_path} == PathMap.put_new(%{}, :bad, 1)
     end
 
     test "errors when path is empty" do
-      assert {:error, {:already_exists, []}} == PathMap.put_new(%{}, [], 1)
+      assert {:error, :already_exists} == PathMap.put_new(%{}, [], 1)
     end
 
     test "errors when encountering non-map intermediate" do
@@ -167,7 +166,7 @@ defmodule PathMapTest do
     end
 
     test "errors when leaf exists" do
-      assert {:error, {:already_exists, [:a, :b]}} ==
+      assert {:error, :already_exists} ==
                PathMap.put_new_auto(%{a: %{b: 1}}, [:a, :b], 2)
     end
 
@@ -181,11 +180,11 @@ defmodule PathMapTest do
     end
 
     test "errors when path is invalid" do
-      assert {:error, {:invalid_path, :bad}} == PathMap.put_new_auto(%{}, :bad, 1)
+      assert {:error, :invalid_path} == PathMap.put_new_auto(%{}, :bad, 1)
     end
 
     test "errors when path is empty" do
-      assert {:error, {:already_exists, []}} == PathMap.put_new_auto(%{}, [], 1)
+      assert {:error, :already_exists} == PathMap.put_new_auto(%{}, [], 1)
     end
   end
 
@@ -313,7 +312,7 @@ defmodule PathMapTest do
     end
 
     test "errors on invalid path type" do
-      assert {:error, {:invalid_path, :bad}} == PathMap.update_auto(%{}, :bad, 0, & &1)
+      assert {:error, :invalid_path} == PathMap.update_auto(%{}, :bad, 0, & &1)
     end
 
     test "errors on invalid function arity" do
