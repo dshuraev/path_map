@@ -7,12 +7,22 @@ defmodule PathMap.MixProject do
       version: "0.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      name: "PathMap",
+      source_url: "https://github.com/dshuraev/path_map",
+      docs: &docs/0
     ]
   end
 
   def cli do
     [preferred_envs: [coverage: :test]]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: ["README.md"]
+    ]
   end
 
   # Run "mix help compile.app" to learn about applications.
@@ -25,8 +35,7 @@ defmodule PathMap.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true}
     ]
   end
 end
