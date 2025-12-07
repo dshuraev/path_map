@@ -1,5 +1,8 @@
 # PathMap
 
+[![Hex.pm](https://img.shields.io/hexpm/v/path_map.svg)](https://hex.pm/packages/path_map)
+[![Hexdocs](https://img.shields.io/badge/docs-hexdocs.pm-blue)](https://hexdocs.pm/path_map)
+
 Deterministic helpers for traversing and mutating nested maps using explicit
 paths (lists of keys). Every call validates inputs, refuses to guess, and
 returns tagged results instead of raising.
@@ -109,6 +112,22 @@ map = %{"config" => %{"port" => 4000}}
 
 See doctests in `lib/path_map.ex` and `test/path_map_test.exs` for detailed
 examples and edge cases.
+
+## Documentation
+
+Full API docs live at [hexdocs.pm/path_map](https://hexdocs.pm/path_map).
+
+## Requirements
+
+- Elixir `~> 1.19`
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Installation
 

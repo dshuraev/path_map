@@ -1,16 +1,19 @@
 defmodule PathMap.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :path_map,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       name: "PathMap",
       source_url: "https://github.com/dshuraev/path_map",
-      docs: &docs/0,
+      docs: docs(),
       package: package()
     ]
   end
@@ -22,15 +25,23 @@ defmodule PathMap.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"]
+      source_ref: "v#{@version}",
+      canonical: "https://hexdocs.pm/path_map",
+      extras: ["README.md", "CHANGELOG.md"],
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md"]
     ]
   end
 
   defp package() do
     [
       name: "path_map",
+      description: "Deterministic helpers for traversing nested maps with explicit key paths.",
       licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/dshuraev/path_map"}
+      links: %{
+        "GitHub" => "https://github.com/dshuraev/path_map",
+        "Hexdocs" => "https://hexdocs.pm/path_map"
+      },
+      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]
   end
 
@@ -47,4 +58,8 @@ defmodule PathMap.MixProject do
       {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true}
     ]
   end
+
+  defp elixirc_paths(:dev), do: ["lib", "dev"]
+  defp elixirc_paths(:test), do: ["lib", "dev"]
+  defp elixirc_paths(_), do: ["lib"]
 end
