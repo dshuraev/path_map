@@ -10,7 +10,8 @@ defmodule PathMap.MixProject do
       deps: deps(),
       name: "PathMap",
       source_url: "https://github.com/dshuraev/path_map",
-      docs: &docs/0
+      docs: &docs/0,
+      package: package()
     ]
   end
 
@@ -22,6 +23,14 @@ defmodule PathMap.MixProject do
     [
       main: "readme",
       extras: ["README.md"]
+    ]
+  end
+
+  defp package() do
+    [
+      name: "path_map",
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/dshuraev/path_map"}
     ]
   end
 
