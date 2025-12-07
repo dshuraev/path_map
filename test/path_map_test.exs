@@ -1,5 +1,6 @@
 defmodule PathMapTest do
   use ExUnit.Case
+  doctest PathMap
 
   describe "fetch/2" do
     test "returns value when path exists" do

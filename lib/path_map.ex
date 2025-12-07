@@ -1,6 +1,47 @@
 defmodule PathMap do
   @moduledoc """
-  Documentation for `PathMap`.
+  PathMap provides deterministic helpers for traversing and mutating nested maps
+  using explicit *paths* (lists of keys).
+
+  Paths can be empty (`[]`, meaning the root map) or lists like `[:a, "b"]`.
+  Keys are not restricted to atoms.
+
+  Every public function validates inputs and returns tagged errors instead of
+  raising. The root is checked first, so a non-map root yields
+  `{:error, {:not_a_map, root, []}}` even if the path is invalid.
+
+  The API comes in two families:
+  - strict (`put/3`, `put_new/3`, `update/3`, etc.) require each path segment to exist
+  - auto-vivifying (`put_auto/3`, `put_new_auto/3`, `update_auto/4`) create
+    missing maps on the way
+
+  Error tuples you may see:
+  - `{:invalid_path, provided}` when the path is not a list
+  - `{:not_a_map, value, prefix}` when traversal hits a non-map at `prefix`
+  - `{:missing, prefix}` when a strict operation needs a missing key
+  - `{:already_exists, path}` when `put_new*/3` refuses to overwrite
+  - `{:invalid_function, fun, arity}` and `{:invalid_initializer, init}` when
+    callbacks have the wrong shape
+  - `:leaf_missing` when `update/3` expects a leaf that is not present
+
+  ## Examples
+
+      iex> map = %{"config" => %{"port" => 4000}}
+      iex> PathMap.fetch(map, ["config", "port"])
+      {:ok, 4000}
+
+      iex> map = %{"config" => %{"port" => 4000}}
+      iex> PathMap.put(map, ["config", "db", "port"], 5432)
+      {:error, {:missing, ["config", "db"]}}
+      iex> {:ok, with_db} = PathMap.put_auto(map, ["config", "db", "port"], 5432)
+      iex> with_db["config"]["db"]["port"]
+      5432
+
+      iex> PathMap.get(%{"config" => 1}, :bad_path, :fallback)
+      :fallback
+
+      iex> PathMap.update_auto(%{"config" => "not a map"}, ["config", "port"], 4000, & &1)
+      {:error, {:not_a_map, "not a map", ["config"]}}
   """
 
   @type key :: term()
@@ -29,20 +70,33 @@ defmodule PathMap do
 
   # SECTION - Read API
   @doc """
-  Fetches a value from `map` at the location specified by `path`.
+  Fetches a value from `map` at `path`.
 
-  Returns `{:ok, val}` on success.
+  `path` must be a list; the empty list returns the full map. The root being a
+  non-map is reported before path validation.
 
-  Errors:
-  - `{:error, {:invalid_path, provided}}` if `path` is not a list of keys, `map` can be anything.
-  - `{:error, {:missing, prefix}}` if `prefix` does not exist
-  - `{:error, {:not_a_map, val, prefix}}` if an intermediate subtree at `prefix` is not a map; `val` is the value at prefix
+  Returns:
+  - `{:ok, value}` when the path can be traversed
+  - `{:error, {:invalid_path, provided}}` when `path` is not a list
+  - `{:error, {:missing, prefix}}` when any segment does not exist
+  - `{:error, {:not_a_map, val, prefix}}` when a non-map is encountered
 
-  here `prefix :: list(key()) ⊆ path`
+  ## Examples
 
-  Special/edge cases:
-  - `path == []` returns `{:ok, original_map}`
-  - `fetch(not_map, [])` returns `{:error, {:not_a_map, not_map, []}}`
+      iex> PathMap.fetch(%{a: %{b: 1}}, [:a, :b])
+      {:ok, 1}
+
+      iex> PathMap.fetch(%{a: %{b: 1}}, [])
+      {:ok, %{a: %{b: 1}}}
+
+      iex> PathMap.fetch(%{a: 1}, [:a, :b])
+      {:error, {:not_a_map, 1, [:a]}}
+
+      iex> PathMap.fetch(%{}, :not_a_list)
+      {:error, {:invalid_path, :not_a_list}}
+
+      iex> PathMap.fetch(:root_is_wrong, [])
+      {:error, {:not_a_map, :root_is_wrong, []}}
   """
   @spec fetch(t(), path()) ::
           {:error, {:not_a_map, val(), path()} | {:missing, path()} | {:invalid_path, term()}}
@@ -75,10 +129,21 @@ defmodule PathMap do
   defp fetch_nested(val, _path, acc), do: {:error, {:not_a_map, val, Enum.reverse(acc)}}
 
   @doc """
-  Get a value from `map` by its `path`. On error, returns `default` value.
+  Gets a value from `map` by its `path`.
 
-  Note that unlike `Map.get/3`, `get/3` will return default value on *any* error,
-  e.g. `map` is not a map or `path` is not a list.
+  Returns the provided `default` (nil by default) on *any* error, including a
+  non-map root or an invalid path type.
+
+  ## Examples
+
+      iex> PathMap.get(%{a: %{b: 1}}, [:a, :b])
+      1
+
+      iex> PathMap.get(%{}, [:missing], :none)
+      :none
+
+      iex> PathMap.get(:not_a_map, [:a], :none)
+      :none
   """
   @spec get(t(), path(), default) :: val() | default when default: term()
   def get(map, path, default \\ nil) do
@@ -89,9 +154,18 @@ defmodule PathMap do
   end
 
   @doc """
-  Check if a given `path` exists in `map`.
-  Returns `true` if the path is valid and leads to a map value,
-  otherwise (on any error) returns `false`.
+  Checks if a given `path` exists in `map`.
+
+  Delegates to `fetch/2` and collapses any error into `false`, including
+  invalid path types or non-map roots.
+
+  ## Examples
+
+      iex> PathMap.exists?(%{a: %{b: 1}}, [:a, :b])
+      true
+
+      iex> PathMap.exists?(%{}, :bad_path)
+      false
   """
   @spec exists?(t(), path()) :: boolean()
   def exists?(map, path) do
@@ -102,10 +176,18 @@ defmodule PathMap do
   end
 
   @doc """
-  Validate a given `path` of `map`.
+  Validates a given `path` of `map`.
 
-  This is a thin wrapper around `fetch/2` that returns `:ok` on success or the
-  same error tuple that `fetch/2` would return.
+  Thin wrapper around `fetch/2` that returns `:ok` on success or the same error
+  tuple as `fetch/2` on failure.
+
+  ## Examples
+
+      iex> PathMap.validate_path(%{a: %{b: 1}}, [:a, :b])
+      :ok
+
+      iex> PathMap.validate_path(%{}, [:missing])
+      {:error, {:missing, [:missing]}}
   """
   @spec validate_path(t(), path()) ::
           :ok
@@ -122,6 +204,14 @@ defmodule PathMap do
   Boolean version of `validate_path/2`.
 
   Returns `true` when the path can be traversed, `false` otherwise.
+
+  ## Examples
+
+      iex> PathMap.valid_path?(%{a: 1}, [:a])
+      true
+
+      iex> PathMap.valid_path?(%{}, [:a, :b])
+      false
   """
   @spec valid_path?(t(), path()) :: boolean()
   def valid_path?(map, path) do
@@ -136,11 +226,26 @@ defmodule PathMap do
 
   @doc """
   Permissive insertion.
-  Put `val` at `path` into `map`, auto-vivifying intermediate maps.
+
+  Put `val` at `path` into `map`, auto-vivifying intermediate maps. An empty
+  path replaces the entire map. Encountering a non-map stops traversal with
+  `{:error, {:not_a_map, val, prefix}}`; root type check runs before path
+  validation.
 
   Errors:
   - `{:error, {:invalid_path, provided}}` if `path` is not a list
   - `{:error, {:not_a_map, val, prefix}}` if an intermediate subtree at `prefix` is not a map
+
+  ## Examples
+
+      iex> PathMap.put_auto(%{}, [:a, :b], 2)
+      {:ok, %{a: %{b: 2}}}
+
+      iex> PathMap.put_auto(%{a: 1}, [:a, :b], 2)
+      {:error, {:not_a_map, 1, [:a]}}
+
+      iex> PathMap.put_auto(:oops, [:a], 1)
+      {:error, {:not_a_map, :oops, []}}
   """
   @spec put_auto(t(), path(), val()) ::
           {:ok, t()}
@@ -176,15 +281,30 @@ defmodule PathMap do
 
   @doc """
   Strict insertion.
+
   Put `val` at `path` into `map`, failing if any part of the path is missing.
+  `path == []` replaces the entire `map` with `val`. Missing segments return
+  `{:error, {:missing, prefix}}`; encountering a non-map returns
+  `{:error, {:not_a_map, val, prefix}}`.
 
   Errors:
   - `{:error, {:invalid_path, provided}}` if `path` is not a list
   - `{:error, {:not_a_map, val, prefix}}` if the traversal encounters a non-map at `prefix`
   - `{:error, {:missing, prefix}}` if `prefix` in `path` does not exist
 
-  Special cases:
-  - `path == []` replaces the entire `map` with `val`
+  ## Examples
+
+      iex> PathMap.put(%{a: %{b: 1}}, [:a, :b], 2)
+      {:ok, %{a: %{b: 2}}}
+
+      iex> PathMap.put(%{}, [:a, :b], 1)
+      {:error, {:missing, [:a]}}
+
+      iex> PathMap.put(%{a: 1}, [:a, :b], 2)
+      {:error, {:not_a_map, 1, [:a]}}
+
+      iex> PathMap.put(%{a: 1}, [], :new)
+      {:ok, :new}
   """
   @spec put(t(), path(), val()) ::
           {:ok, t()}
@@ -220,9 +340,23 @@ defmodule PathMap do
     do: {:error, {:not_a_map, not_a_map, Enum.reverse(acc)}}
 
   @doc """
-  Put a new element at `path` with `val`.
-  If the element exists, returns error.
-  Does not auto-vivify paths.
+  Put a new element at `path` with `val` without overwriting existing data.
+
+  Traverses strictly (no auto-vivification). Missing intermediates yield
+  `{:error, {:missing, prefix}}` and hitting a non-map yields
+  `{:error, {:not_a_map, val, prefix}}`. Passing `[]` returns
+  `{:error, {:already_exists, []}}`.
+
+  ## Examples
+
+      iex> PathMap.put_new(%{a: %{b: 1}}, [:a, :c], 2)
+      {:ok, %{a: %{b: 1, c: 2}}}
+
+      iex> PathMap.put_new(%{a: %{b: 1}}, [:a, :b], 2)
+      {:error, {:already_exists, [:a, :b]}}
+
+      iex> PathMap.put_new(%{}, [:a, :b], 1)
+      {:error, {:missing, [:a]}}
   """
   @spec put_new(t(), path(), val()) ::
           {:ok, t()}
@@ -264,9 +398,22 @@ defmodule PathMap do
     do: {:error, {:not_a_map, not_a_map, Enum.reverse(acc)}}
 
   @doc """
-  Put a new element at `path` with `val`.
-  If the element exists, returns error.
-  Auto vivify path with empty dictionary.
+  Put a new element at `path` with `val`, auto-vivifying missing maps.
+
+  Returns `{:error, {:already_exists, path}}` when the leaf already exists.
+  Encountering an existing non-map still returns `{:error, {:not_a_map, val, prefix}}`.
+  Passing `[]` returns `{:error, {:already_exists, []}}`.
+
+  ## Examples
+
+      iex> PathMap.put_new_auto(%{}, [:a, :b, :c], 3)
+      {:ok, %{a: %{b: %{c: 3}}}}
+
+      iex> PathMap.put_new_auto(%{a: %{b: 1}}, [:a, :b], 2)
+      {:error, {:already_exists, [:a, :b]}}
+
+      iex> PathMap.put_new_auto(%{a: 1}, [:a, :b], 2)
+      {:error, {:not_a_map, 1, [:a]}}
   """
   @spec put_new_auto(t(), path(), val()) ::
           {:ok, t()}
@@ -307,7 +454,9 @@ defmodule PathMap do
   Initialize an element at `path` with `initializer` function if it doesn't exist.
 
   Traverses the path without auto-vivifying, leaving the existing value intact
-  when the element already exists.
+  when the element already exists. `initializer` must be a 0-arity function and
+  is only executed when the leaf is missing. `path == []` is a no-op that
+  returns `{:ok, map}`.
 
   Errors:
   - `{:error, {:invalid_path, provided}}` if `path` is not a list
@@ -315,8 +464,16 @@ defmodule PathMap do
   - `{:error, {:missing, prefix}}` if part of the path does not exist
   - `{:error, {:invalid_initializer, initializer}}` if initializer is not a 0-arity function
 
-  Special cases:
-  - `path == []` is a no-op and returns `{:ok, map}`
+  ## Examples
+
+      iex> PathMap.ensure(%{a: %{b: 1}}, [:a, :b], fn -> 0 end)
+      {:ok, %{a: %{b: 1}}}
+
+      iex> PathMap.ensure(%{a: %{}}, [:a, :b], fn -> 2 end)
+      {:ok, %{a: %{b: 2}}}
+
+      iex> PathMap.ensure(%{}, [:a, :b], fn -> 2 end)
+      {:error, {:missing, [:a]}}
   """
   @spec ensure(t(), path(), (-> val())) ::
           {:ok, t()}
@@ -360,8 +517,28 @@ defmodule PathMap do
 
   @doc """
   Update an element at `path` with `function`.
-  If the element does not exist, return error.
-  Does not auto-vivify the paths.
+
+  Traverses strictly (no auto-vivification). Returns `{:error, :leaf_missing}`
+  when the terminal key is absent even if intermediates exist. `path == []`
+  applies `function` to the entire map.
+
+  Errors:
+  - `{:error, {:invalid_path, provided}}` if `path` is not a list
+  - `{:error, {:invalid_function, fun, 1}}` if `function` is not arity-1
+  - `{:error, {:missing, prefix}}` if an intermediate segment is missing
+  - `{:error, {:not_a_map, val, prefix}}` if an intermediate value is not a map
+  - `{:error, :leaf_missing}` if the final key is missing while intermediates exist
+
+  ## Examples
+
+      iex> PathMap.update(%{a: 1}, [:a], &(&1 + 1))
+      {:ok, %{a: 2}}
+
+      iex> PathMap.update(%{a: %{}}, [:a, :b], &(&1 + 1))
+      {:error, :leaf_missing}
+
+      iex> PathMap.update(%{a: 1}, [], &Map.put(&1, :b, 2))
+      {:ok, %{a: 1, b: 2}}
   """
   @spec update(t(), path(), (val() -> val())) ::
           {:ok, t()}
@@ -405,9 +582,29 @@ defmodule PathMap do
     do: {:error, {:not_a_map, not_a_map, Enum.reverse(acc)}}
 
   @doc """
-  Update an element at `path` with `function`.
-  If it does not exist, set it to `default`.
-  Does not auto-vivify the paths.
+  Update an element at `path` with `function`, inserting `default` when missing.
+
+  Traverses strictly (no auto-vivification). Missing intermediate segments
+  return `{:error, {:missing, prefix}}`; encountering a non-map returns
+  `{:error, {:not_a_map, val, prefix}}`. When the final key is absent but the
+  path exists so far, it is set to `default` without calling `function`. An
+  empty path applies `function` to the root map.
+
+  Errors:
+  - `{:error, {:invalid_path, provided}}` if `path` is not a list
+  - `{:error, {:invalid_function, fun, 1}}` if `function` is not arity-1
+  - `{:error, {:not_a_map, val, prefix}}` or `{:error, {:missing, prefix}}` for traversal issues
+
+  ## Examples
+
+      iex> PathMap.update(%{a: %{b: 1}}, [:a, :b], 0, &(&1 + 1))
+      {:ok, %{a: %{b: 2}}}
+
+      iex> PathMap.update(%{a: %{}}, [:a, :b], 5, &(&1 + 1))
+      {:ok, %{a: %{b: 5}}}
+
+      iex> PathMap.update(%{}, [:a, :b], 0, &(&1 + 1))
+      {:error, {:missing, [:a]}}
   """
   @spec update(t(), path(), val(), (val() -> val())) ::
           {:ok, t()} | err_not_a_map() | err_invalid_path() | err_missing() | err_invalid_fun()
@@ -447,9 +644,23 @@ defmodule PathMap do
     do: {:error, {:not_a_map, not_a_map, Enum.reverse(acc)}}
 
   @doc """
-  Update an element at `path` with `function`.
-  If it does not exist, set it to `default`.
-  Auto-vivify the path with empty dictionaries if any missing.
+  Update an element at `path` with `function`, auto-vivifying missing maps.
+
+  Missing leaves are initialized to `default` and then passed to `function`.
+  Missing intermediates are created as `%{}`. `path == []` applies `function` to
+  the root map. Fails when the root or an encountered value is not a map, when
+  the path is not a list, or when `function` is not arity-1.
+
+  ## Examples
+
+      iex> PathMap.update_auto(%{}, [:a, :b], 0, &(&1 + 1))
+      {:ok, %{a: %{b: 1}}}
+
+      iex> PathMap.update_auto(%{a: %{b: 2}}, [:a, :b], 0, &(&1 + 1))
+      {:ok, %{a: %{b: 3}}}
+
+      iex> PathMap.update_auto(%{a: 1}, [:a, :b], 0, & &1)
+      {:error, {:not_a_map, 1, [:a]}}
   """
   @spec update_auto(t(), path(), val(), (val() -> val())) ::
           {:ok, t()} | err_not_a_map() | err_invalid_path() | err_invalid_fun()
