@@ -40,7 +40,7 @@ defmodule PathMap.MixProject do
       licenses: ["MIT"],
       links: %{
         "GitHub" => "https://github.com/dshuraev/path_map",
-        "Hexdocs" => "https://hexdocs.pm/path_map"
+        "Hexdocs" => "https://hex.pm/packages/path_map"
       },
       files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE)
     ]
